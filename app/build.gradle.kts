@@ -29,7 +29,7 @@ fun buildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
-    namespace = "com.anonamus.mobileagent"
+    namespace = "com.sid.agent"
     compileSdk = 36
     // F-Droid's r26b recipe installs 26.1.10909125. Keep AGP from selecting
     // its newer default NDK; local developers may override this explicitly.
@@ -47,7 +47,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.anonamus.mobileagent"
+        applicationId = "com.sid.agent"
         minSdk = 28
         // The direct APK retains the proven target-28 PRoot execution path. The
         // Play build targets current Android while its runtime path is validated.
@@ -145,6 +145,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

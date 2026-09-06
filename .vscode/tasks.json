@@ -4,7 +4,7 @@
     {
       "label": "Run Mobile Agent on Device",
       "type": "shell",
-      "command": "./gradlew installDebug && adb shell am start -n com.anonamus.mobileagent/.MainActivity",
+      "command": "./gradlew installDebug && adb shell am start -n com.sid.agent/.MainActivity",
       "group": {
         "kind": "build",
         "isDefault": true

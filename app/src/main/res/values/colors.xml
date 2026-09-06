@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sampled from the icon artwork so the adaptive background, the splash
+         window and the icon plate are all the same black. -->
+    <color name="icon_background">#060707</color>
+    <color name="splash_background">#060707</color>
+    <color name="brand_orange">#FF9A2E</color>
+</resources>

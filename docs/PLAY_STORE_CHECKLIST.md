@@ -1,10 +1,10 @@
 # Google Play release checklist
 
-This checklist covers the Play-facing work for package `com.anonamus.mobileagent`. It does not resolve the separate policy and technical review required for the downloadable local Linux and Claude Code runtime.
+This checklist covers the Play-facing work for package `com.sid.agent`. It does not resolve the separate policy and technical review required for the downloadable local Linux and Claude Code runtime.
 
 ## Implemented in the project
 
-- [x] Stable application ID: `com.anonamus.mobileagent`
+- [x] Stable application ID: `com.sid.agent`
 - [x] API 36 Play build switch
 - [x] ARM-only native output for Play builds (`arm64-v8a` + `armeabi-v7a`; narrow with `-PmhAbis=`)
 - [x] Android 16 KB page-size alignment verified for the 64-bit libraries (ARMv7 links at the 4 KB ARM page size)
@@ -27,7 +27,7 @@ This checklist covers the Play-facing work for package `com.anonamus.mobileagent
 - [x] Publish `PRIVACY.md` at the HTTPS URL configured by `privacyPolicyUrl`
 - [x] Create and protect a Play upload keystore
 - [ ] Enrol in Play App Signing
-- [ ] Reserve and register `com.anonamus.mobileagent` in Play Console
+- [ ] Reserve and register `com.sid.agent` in Play Console
 - [ ] Increment `appVersionCode` for every uploaded release
 - [x] Create a 512×512 Play icon and 1024×500 feature graphic
 - [ ] Review phone screenshots against the final release build

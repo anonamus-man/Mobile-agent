@@ -76,7 +76,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Download
@@ -177,6 +177,7 @@ import com.anonamus.mobileagent.model.ProviderProfile
 import com.anonamus.mobileagent.model.ToolRequest
 import com.anonamus.mobileagent.model.WorkspaceEntry
 import com.anonamus.mobileagent.model.projectSlug
+import com.anonamus.mobileagent.runtime.DeviceMemory
 import com.anonamus.mobileagent.runtime.HostArchitecture
 import com.anonamus.mobileagent.runtime.RuntimeExecutionService
 import com.anonamus.mobileagent.runtime.RuntimeSetupService
@@ -632,13 +633,17 @@ private fun RuntimeSetupPromptScreen(
     val context = LocalContext.current
     val activityManager = context.getSystemService(ActivityManager::class.java)
     val memoryInfo = remember { ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo) }
-    val totalRamGb = memoryInfo.totalMem / 1_073_741_824L
+    val totalRamGb = DeviceMemory.approximateTotalGb(memoryInfo.totalMem)
     // The guest userspace must match the bitness of this process, so the memory
     // floor follows the architecture: ARMv7 devices are smaller by definition.
     val hostArch = HostArchitecture.current
     val requiredRamGb = hostArch?.minimumRamGb ?: 4
     val supportedCpu = hostArch != null
-    val compatible = supportedCpu && totalRamGb >= requiredRamGb
+    val hasRecommendedRam = totalRamGb >= requiredRamGb
+    // Only the CPU is a hard requirement: without a matching ABI the guest
+    // userspace cannot be assembled at all. Being under the memory floor merely
+    // degrades performance, so it is surfaced as a warning the user can accept.
+    val compatible = supportedCpu
 
     var currentStep by remember { mutableIntStateOf(0) }
     val setupScrollState = rememberScrollState()
@@ -736,17 +741,26 @@ private fun RuntimeSetupPromptScreen(
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
+                            val badgeColor = when {
+                                !supportedCpu -> MaterialTheme.colorScheme.error
+                                !hasRecommendedRam -> PocketOrange
+                                else -> PocketGreen
+                            }
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = if (compatible) PocketGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
-                                border = BorderStroke(0.5.dp, if (compatible) PocketGreen.copy(alpha = 0.35f) else MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+                                color = badgeColor.copy(alpha = 0.15f),
+                                border = BorderStroke(0.5.dp, badgeColor.copy(alpha = 0.35f)),
                             ) {
                                 Text(
-                                    text = if (compatible) "Verified" else "Unsupported",
+                                    text = when {
+                                        !supportedCpu -> "Unsupported"
+                                        !hasRecommendedRam -> "Limited"
+                                        else -> "Verified"
+                                    },
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (compatible) PocketGreen else MaterialTheme.colorScheme.error,
+                                    color = badgeColor,
                                 )
                             }
                         }
@@ -756,8 +770,8 @@ private fun RuntimeSetupPromptScreen(
                         SpecRow(
                             icon = Icons.Default.Memory,
                             label = "Memory (RAM)",
-                            value = "$totalRamGb GB · ${if (totalRamGb >= 8) "Full mode (8GB+)" else "Lite mode"}",
-                            statusOk = totalRamGb >= requiredRamGb,
+                            value = "$totalRamGb GB · ${if (totalRamGb >= DeviceMemory.FULL_MODE_GB) "Full mode (8GB+)" else "Lite mode"}",
+                            statusOk = hasRecommendedRam,
                         )
 
                         SpecRow(
@@ -777,6 +791,67 @@ private fun RuntimeSetupPromptScreen(
                 }
 
                 Spacer(Modifier.height(16.dp))
+
+                if (!supportedCpu) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.10f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                HostArchitecture.UNSUPPORTED_MESSAGE,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                } else if (!hasRecommendedRam) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = PocketOrange.copy(alpha = 0.10f),
+                        border = BorderStroke(1.dp, PocketOrange.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = PocketOrange,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "Below the recommended ${requiredRamGb} GB",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "Mobile Agent will still install and run, but large builds may be " +
+                                        "killed by Android's low-memory reaper. Close other apps before " +
+                                        "starting a long task.",
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
 
                 // Zero-Root Security Callout
                 Surface(
@@ -842,7 +917,7 @@ private fun RuntimeSetupPromptScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         Text(
-                            text = if (compatible) "Continue to Tool Setup" else "Device not supported",
+                            text = if (supportedCpu) "Continue to Tool Setup" else "Device not supported",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                         )
@@ -965,7 +1040,7 @@ private fun RuntimeSetupPromptScreen(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            text = if (compatible) "Install Mobile Agent" else "Device not supported",
+                            text = if (supportedCpu) "Install Mobile Agent" else "Device not supported",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                         )
@@ -1590,16 +1665,17 @@ private fun StepDots(step: Int) {
 private fun DeviceCheckStep(context: Context, onContinue: () -> Unit) {
     val activityManager = context.getSystemService(ActivityManager::class.java)
     val memoryInfo = remember { ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo) }
-    val totalRamGb = memoryInfo.totalMem / 1_073_741_824L
+    val totalRamGb = DeviceMemory.approximateTotalGb(memoryInfo.totalMem)
     val hostArch = HostArchitecture.current
     val requiredRamGb = hostArch?.minimumRamGb ?: 4
     val supportedCpu = hostArch != null
-    val compatible = supportedCpu && totalRamGb >= requiredRamGb
+    val hasRecommendedRam = totalRamGb >= requiredRamGb
+    val compatible = supportedCpu
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         BrandMark()
         Text("Your phone is the workspace", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Mobile Agent checks compatibility before downloading the private Linux runtime.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        CheckRow(Icons.Default.Memory, "Memory", "$totalRamGb GB · ${if (totalRamGb >= 8) "Full mode" else "Lite mode"}", totalRamGb >= requiredRamGb)
+        CheckRow(Icons.Default.Memory, "Memory", "$totalRamGb GB · ${if (totalRamGb >= DeviceMemory.FULL_MODE_GB) "Full mode" else "Lite mode"}", hasRecommendedRam)
         CheckRow(Icons.Default.Code, "Processor", HostArchitecture.displayName, supportedCpu)
         CheckRow(Icons.Default.Storage, "Android", "Android ${Build.VERSION.RELEASE}", true)
         Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(16.dp)) {
@@ -1610,7 +1686,7 @@ private fun DeviceCheckStep(context: Context, onContinue: () -> Unit) {
             )
         }
         Button(onClick = onContinue, enabled = compatible, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text(if (compatible) "Continue" else "This device is not supported")
+            Text(if (supportedCpu) "Continue" else "This device is not supported")
         }
     }
 }
@@ -2117,7 +2193,7 @@ private fun ProjectsScreen(
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Chat,
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
                             contentDescription = null,
                             modifier = Modifier.size(17.dp),
                         )

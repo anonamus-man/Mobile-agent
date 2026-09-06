@@ -9,7 +9,6 @@ import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeout
@@ -50,7 +49,14 @@ class RuntimeInstaller(private val context: Context) {
     private val systemUpgradeMarker = File(rootfs, ".pocket-system-upgrade-version")
     private val devStacksFile = File(rootfs, ".pocket-dev-stacks.json")
 
+    /**
+     * Null on a CPU Mobile Harness cannot host. Resolved lazily rather than in the
+     * constructor so the app still starts and can explain itself on such devices.
+     */
+    private val hostArch: HostArch? get() = HostArchitecture.current
+
     fun isInstalled(): Boolean {
+        val arch = hostArch ?: return false
         val proot = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
         // Devices set up before staged toolchains keep working through the legacy marker;
         // fresh installs require the new core-tools marker instead.
@@ -59,11 +65,21 @@ class RuntimeInstaller(private val context: Context) {
             coreToolsMarker.readTextOrNull() == CORE_TOOLS_VERSION
         return proot.canExecute() &&
             File(rootfs, "usr/bin/bash").exists() &&
-            rootfsMarker.readTextOrNull() == ROOTFS_VERSION &&
+            rootfsMarker.readTextOrNull() == RuntimeArtifacts.rootfsVersion(arch) &&
             File(rootfs, "usr/local/bin/claude").exists() &&
+            claudePayloadPresent(arch) &&
             File(rootfs, "usr/local/bin/node").exists() &&
             (legacyLanguageTools || coreToolsReady) &&
             marker.exists()
+    }
+
+    /**
+     * The JavaScript channel installs a launcher plus a payload directory; a
+     * launcher on its own means an interrupted install that must be repaired.
+     */
+    private fun claudePayloadPresent(arch: HostArch): Boolean = when (arch.claudeDelivery) {
+        ClaudeDelivery.NATIVE_BINARY -> true
+        ClaudeDelivery.NODE_PACKAGE -> File(rootfs, RuntimeArtifacts.JS_CLAUDE_ENTRY).isFile
     }
 
     /** Returns the already verified runtime without performing network or update checks. */
@@ -104,15 +120,20 @@ class RuntimeInstaller(private val context: Context) {
         selectedStacks: Set<DevStack> = emptySet(),
         onProgress: suspend (RuntimeInstallProgress) -> Unit,
     ): InstalledRuntime {
-        require(android.os.Build.SUPPORTED_ABIS.contains("arm64-v8a")) { "Pocket runtime requires an ARM64 device" }
+        val arch = HostArchitecture.requireSupported()
         val proot = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
         require(proot.canExecute()) { "The embedded PRoot launcher is unavailable" }
 
-        if (!File(rootfs, "usr/bin/bash").exists() || rootfsMarker.readTextOrNull() != ROOTFS_VERSION) {
+        val rootfsVersion = RuntimeArtifacts.rootfsVersion(arch)
+        if (!File(rootfs, "usr/bin/bash").exists() || rootfsMarker.readTextOrNull() != rootfsVersion) {
             onProgress(RuntimeInstallProgress("Downloading the private Ubuntu runtime", 0.03f))
             downloads.mkdirs()
-            val archive = File(downloads, ROOTFS_FILE)
-            downloadVerified(ROOTFS_URL, archive, ROOTFS_SHA256) { downloaded, total ->
+            val archive = File(downloads, RuntimeArtifacts.rootfsFileName(arch))
+            downloadVerified(
+                RuntimeArtifacts.rootfsUrl(arch),
+                archive,
+                RuntimeArtifacts.rootfsSha256(arch),
+            ) { downloaded, total ->
                 val ratio = if (total > 0) downloaded.toFloat() / total else 0f
                 onProgress(RuntimeInstallProgress("Downloading Ubuntu", 0.03f + ratio * 0.22f, downloaded, total.takeIf { it > 0 }))
             }
@@ -121,50 +142,45 @@ class RuntimeInstaller(private val context: Context) {
             staging.deleteRecursively()
             staging.mkdirs()
             extractRootfs(archive, staging)
-            File(staging, ".pocket-rootfs-version").writeText(ROOTFS_VERSION)
+            File(staging, ".pocket-rootfs-version").writeText(rootfsVersion)
             rootfs.deleteRecursively()
             check(staging.renameTo(rootfs)) { "Could not activate the Linux environment" }
             writeResolver()
             archive.delete()
         }
 
-        onProgress(RuntimeInstallProgress("Checking the latest Claude Code release", 0.32f))
-        val version = fetchText("https://registry.npmjs.org/@anthropic-ai/claude-code/latest")
-            .let { JSONObject(it).getString("version") }
-            .also { require(it.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+"))) }
-        val claude = File(rootfs, "usr/local/bin/claude")
-        if (!marker.exists() || marker.readText().trim() != version || !claude.exists()) {
-            onProgress(RuntimeInstallProgress("Downloading Claude Code $version from Anthropic", 0.35f))
-            val base = "https://downloads.claude.ai/claude-code-releases/$version"
-            val manifest = JSONObject(fetchText("$base/manifest.json"))
-            val checksum = manifest.getJSONObject("platforms").getJSONObject("linux-arm64").getString("checksum")
-            val staged = File(downloads, "claude-$version")
-            downloadVerified("$base/linux-arm64/claude", staged, checksum) { downloaded, total ->
-                val ratio = if (total > 0) downloaded.toFloat() / total else 0f
-                onProgress(RuntimeInstallProgress("Downloading Claude Code $version", 0.35f + ratio * 0.20f, downloaded, total.takeIf { it > 0 }))
-            }
-            onProgress(RuntimeInstallProgress("Verifying Claude Code", 0.56f))
-            claude.parentFile?.mkdirs()
-            if (claude.exists()) claude.delete()
-            check(staged.renameTo(claude)) { "Could not activate Claude Code" }
-            Os.chmod(claude.absolutePath, 0b111101101)
-            ensureSettingsAndHooks()
-            marker.writeText(version)
+        val coreNeeded = !File(rootfs, "usr/bin/git").exists() || coreToolsMarker.readTextOrNull() != CORE_TOOLS_VERSION
+
+        // On 32-bit ARM the agent itself is JavaScript, so the guest Node.js has
+        // to be staged before Claude Code can be installed at all.
+        if (arch.claudeDelivery == ClaudeDelivery.NODE_PACKAGE) {
+            installNodeIfNeeded(arch, proot, 0.30f, 0.40f, onProgress)
+        }
+
+        onProgress(RuntimeInstallProgress("Checking the latest Claude Code release", 0.42f))
+        when (arch.claudeDelivery) {
+            ClaudeDelivery.NATIVE_BINARY -> installNativeClaude(onProgress)
+            ClaudeDelivery.NODE_PACKAGE -> installJavaScriptClaude(onProgress)
         }
 
         // Stage developer tools one group at a time so first setup only downloads
         // what the user actually picked. Node.js + Git are the always-needed core
         // because Claude Code itself runs on Node.
-        val coreNeeded = !File(rootfs, "usr/bin/git").exists() || coreToolsMarker.readTextOrNull() != CORE_TOOLS_VERSION
         if (coreNeeded) {
-            installNodeIfNeeded(proot, 0.58f, 0.66f, onProgress)
+            installNodeIfNeeded(arch, proot, 0.58f, 0.66f, onProgress)
         }
         if (systemUpgradeMarker.readTextOrNull() != SYSTEM_UPGRADE_VERSION) {
             runSystemMaintenance(proot, onProgress)
             systemUpgradeMarker.writeText(SYSTEM_UPGRADE_VERSION)
         }
         if (coreNeeded) {
-            aptInstall(proot, listOf("git", "ca-certificates"), "Installing Git and base tools", 0.70f, onProgress)
+            aptInstall(
+                proot,
+                RuntimeArtifacts.coreAptPackages(arch),
+                "Installing Git and base tools",
+                0.70f,
+                onProgress,
+            )
             writeResolver()
             verifyGuest(proot, "git --version", "Base tools could not be verified")
             coreToolsMarker.writeText(CORE_TOOLS_VERSION)
@@ -177,12 +193,145 @@ class RuntimeInstaller(private val context: Context) {
             applyStack(proot, stack, from, from + slice, onProgress)
         }
 
-        // The binary and version manifest were already checksum-verified above. Running a
-        // separate `claude --version` probe under PRoot can leave inherited output pipes
+        // Downloads were checksum-verified above. Running a separate
+        // `claude --version` probe under PRoot can leave inherited output pipes
         // open on some Android kernels, so the real user session is the launch check.
         onProgress(RuntimeInstallProgress("Setup complete", 1f))
-        return InstalledRuntime(proot, rootfs, claude, version)
+        return InstalledRuntime(
+            proot = proot,
+            rootfs = rootfs,
+            claude = File(rootfs, "usr/local/bin/claude"),
+            version = marker.readText().trim(),
+        )
     }
+
+    /**
+     * ARM64: Anthropic's signed standalone build, verified against the checksum
+     * in the release manifest.
+     */
+    private suspend fun installNativeClaude(onProgress: suspend (RuntimeInstallProgress) -> Unit) {
+        val version = fetchText("${RuntimeArtifacts.NPM_REGISTRY}/${RuntimeArtifacts.NPM_PACKAGE}/latest")
+            .let { JSONObject(it).getString("version") }
+            .also { require(it.matches(VERSION_PATTERN)) }
+        val claude = File(rootfs, "usr/local/bin/claude")
+        if (marker.exists() && marker.readText().trim() == version && claude.exists()) return
+
+        onProgress(RuntimeInstallProgress("Downloading Claude Code $version from Anthropic", 0.35f))
+        val base = "https://downloads.claude.ai/claude-code-releases/$version"
+        val manifest = JSONObject(fetchText("$base/manifest.json"))
+        val checksum = manifest.getJSONObject("platforms").getJSONObject("linux-arm64").getString("checksum")
+        val staged = File(downloads, "claude-$version")
+        downloadVerified("$base/linux-arm64/claude", staged, checksum) { downloaded, total ->
+            val ratio = if (total > 0) downloaded.toFloat() / total else 0f
+            onProgress(RuntimeInstallProgress("Downloading Claude Code $version", 0.35f + ratio * 0.20f, downloaded, total.takeIf { it > 0 }))
+        }
+        onProgress(RuntimeInstallProgress("Verifying Claude Code", 0.56f))
+        claude.parentFile?.mkdirs()
+        if (claude.exists()) claude.delete()
+        check(staged.renameTo(claude)) { "Could not activate Claude Code" }
+        Os.chmod(claude.absolutePath, 0b111101101)
+        ensureSettingsAndHooks()
+        marker.writeText(version)
+    }
+
+    /**
+     * ARM32: Anthropic publishes no `linux-arm` binary, so the npm tarball is
+     * used instead and executed by the guest Node.js. Only releases up to
+     * [RuntimeArtifacts.FALLBACK_JS_CLAUDE_VERSION] carry a real `cli.js`;
+     * later ones are installers for binaries that do not exist for this CPU.
+     */
+    private suspend fun installJavaScriptClaude(onProgress: suspend (RuntimeInstallProgress) -> Unit) {
+        val release = resolveJavaScriptClaudeRelease()
+        val claude = File(rootfs, "usr/local/bin/claude")
+        val entry = File(rootfs, RuntimeArtifacts.JS_CLAUDE_ENTRY)
+        if (marker.exists() && marker.readText().trim() == release.version && claude.exists() && entry.isFile) return
+
+        onProgress(RuntimeInstallProgress("Downloading Claude Code ${release.version}", 0.44f))
+        downloads.mkdirs()
+        val staged = File(downloads, "claude-code-${release.version}.tgz")
+        downloadVerified(release.tarball, staged, release.digest) { downloaded, total ->
+            val ratio = if (total > 0) downloaded.toFloat() / total else 0f
+            onProgress(
+                RuntimeInstallProgress(
+                    "Downloading Claude Code ${release.version}",
+                    0.44f + ratio * 0.10f,
+                    downloaded,
+                    total.takeIf { it > 0 },
+                ),
+            )
+        }
+
+        onProgress(RuntimeInstallProgress("Installing Claude Code ${release.version}", 0.55f))
+        val staging = File(runtimeDir, "claude-code.installing")
+        staging.deleteRecursively()
+        staging.mkdirs()
+        // npm tarballs nest everything under package/.
+        extractTarStrippingRoot(staged, staging, "Claude Code")
+        check(File(staging, "cli.js").isFile) {
+            "Claude Code ${release.version} does not contain a JavaScript entry point"
+        }
+        val home = File(rootfs, RuntimeArtifacts.JS_CLAUDE_HOME)
+        home.deleteRecursively()
+        home.parentFile?.mkdirs()
+        check(staging.renameTo(home)) { "Could not activate Claude Code" }
+        Os.chmod(File(home, "cli.js").absolutePath, 0b111101101)
+        staged.delete()
+
+        claude.parentFile?.mkdirs()
+        if (claude.exists() || java.nio.file.Files.isSymbolicLink(claude.toPath())) claude.delete()
+        claude.writeText(RuntimeArtifacts.jsClaudeLauncherScript())
+        Os.chmod(claude.absolutePath, 0b111101101)
+        ensureSettingsAndHooks()
+        marker.writeText(release.version)
+    }
+
+    private data class NpmRelease(val version: String, val tarball: String, val digest: ExpectedDigest)
+
+    /**
+     * Picks the newest published release that still exposes `bin.claude = cli.js`,
+     * falling back to the known-good pin if the registry cannot be reached or its
+     * shape changes. The abbreviated packument keeps this to a single request.
+     */
+    private fun resolveJavaScriptClaudeRelease(): NpmRelease {
+        val discovered = runCatching {
+            val document = JSONObject(
+                fetchText(
+                    "${RuntimeArtifacts.NPM_REGISTRY}/${RuntimeArtifacts.NPM_PACKAGE}",
+                    accept = "application/vnd.npm.install-v1+json",
+                ),
+            )
+            val versions = document.getJSONObject("versions")
+            versions.keys()
+                .asSequence()
+                .filter { it.matches(VERSION_PATTERN) }
+                .filter { version ->
+                    versions.getJSONObject(version)
+                        .optJSONObject("bin")
+                        ?.optString("claude")
+                        ?.endsWith("cli.js") == true
+                }
+                .maxWithOrNull(SEMVER_ORDER)
+                ?.let { version -> npmRelease(versions.getJSONObject(version), version) }
+        }.getOrNull()
+        if (discovered != null) return discovered
+
+        val pinned = RuntimeArtifacts.FALLBACK_JS_CLAUDE_VERSION
+        val metadata = JSONObject(
+            fetchText("${RuntimeArtifacts.NPM_REGISTRY}/${RuntimeArtifacts.NPM_PACKAGE}/$pinned"),
+        )
+        return npmRelease(metadata, pinned)
+    }
+
+    private fun npmRelease(metadata: JSONObject, version: String): NpmRelease {
+        val dist = metadata.getJSONObject("dist")
+        val tarball = dist.getString("tarball")
+        require(tarball.startsWith("https://")) { "Claude Code download URL is not secure" }
+        val digest = dist.optString("integrity").takeIf { it.isNotBlank() }
+            ?.let(ExpectedDigest::fromNpmIntegrity)
+            ?: ExpectedDigest("SHA-1", dist.getString("shasum"), base64 = false)
+        return NpmRelease(version, tarball, digest)
+    }
+
 
     /**
      * Installs one optional development stack inside Ubuntu. Safe to call again:
@@ -332,16 +481,18 @@ class RuntimeInstaller(private val context: Context) {
     }
 
     private suspend fun installNodeIfNeeded(
+        arch: HostArch,
         proot: File,
         from: Float,
         to: Float,
         onProgress: suspend (RuntimeInstallProgress) -> Unit,
     ) {
         if (File(rootfs, "usr/local/bin/node").exists()) return
-        onProgress(RuntimeInstallProgress("Downloading Node.js $NODE_VERSION LTS", from))
+        val nodeVersion = RuntimeArtifacts.nodeVersion(arch)
+        onProgress(RuntimeInstallProgress("Downloading Node.js $nodeVersion LTS", from))
         downloads.mkdirs()
-        val nodeFileName = "node-$NODE_VERSION-linux-arm64.tar.gz"
-        val nodeBaseUrl = "https://nodejs.org/dist/$NODE_VERSION"
+        val nodeFileName = RuntimeArtifacts.nodeFileName(arch)
+        val nodeBaseUrl = RuntimeArtifacts.nodeBaseUrl(arch)
         val checksum = fetchText("$nodeBaseUrl/SHASUMS256.txt")
             .lineSequence()
             .map(String::trim)
@@ -353,7 +504,7 @@ class RuntimeInstaller(private val context: Context) {
             val ratio = if (total > 0) downloaded.toFloat() / total else 0f
             onProgress(
                 RuntimeInstallProgress(
-                    "Downloading Node.js $NODE_VERSION LTS",
+                    "Downloading Node.js $nodeVersion LTS",
                     from + ratio * (to - from),
                     downloaded,
                     total.takeIf { it > 0 },
@@ -364,7 +515,7 @@ class RuntimeInstaller(private val context: Context) {
         val nodeStaging = File(runtimeDir, "node.installing")
         nodeStaging.deleteRecursively()
         nodeStaging.mkdirs()
-        extractNodeArchive(nodeArchive, nodeStaging)
+        extractTarStrippingRoot(nodeArchive, nodeStaging, "Node.js")
         val nodeHome = File(rootfs, "usr/local/lib/nodejs")
         nodeHome.deleteRecursively()
         nodeHome.parentFile?.mkdirs()
@@ -621,6 +772,11 @@ class RuntimeInstaller(private val context: Context) {
                 put("PROOT_LOADER", File(context.applicationInfo.nativeLibraryDir, "libprootloader.so").absolutePath)
                 // Also protects any glibc helper Claude starts later.
                 put("GLIBC_TUNABLES", "glibc.pthread.rseq=0")
+                // Claude Code only vendors ripgrep for arm64/x64, so 32-bit ARM
+                // guests use the ripgrep installed from the Ubuntu archive.
+                if (hostArch?.claudeDelivery == ClaudeDelivery.NODE_PACKAGE) {
+                    put("USE_BUILTIN_RIPGREP", "0")
+                }
                 putAll(environment)
             },
             cwd = context.filesDir.absolutePath,
@@ -749,7 +905,11 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
         }
     }
 
-    private fun extractNodeArchive(archive: File, destination: File) {
+    /**
+     * Extracts a tar.gz whose payload sits under a single top-level directory
+     * (Node.js distributions and npm tarballs both do), dropping that prefix.
+     */
+    private fun extractTarStrippingRoot(archive: File, destination: File, label: String) {
         val deferredLinks = mutableListOf<Pair<File, File>>()
         TarArchiveInputStream(GzipCompressorInputStream(BufferedInputStream(archive.inputStream()))).use { tar ->
             var entry: TarArchiveEntry? = tar.nextEntry
@@ -785,7 +945,7 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
             }
         }
         deferredLinks.forEach { (target, linkTarget) ->
-            require(linkTarget.isFile) { "Node.js archive hard-link target is missing" }
+            require(linkTarget.isFile) { "$label archive hard-link target is missing" }
             target.parentFile?.mkdirs()
             linkTarget.inputStream().use { input -> FileOutputStream(target).use { input.copyTo(it) } }
             runCatching { Os.chmod(target.absolutePath, android.system.Os.stat(linkTarget.absolutePath).st_mode) }
@@ -805,6 +965,13 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
         url: String,
         destination: File,
         expectedSha256: String,
+        onBytes: suspend (downloaded: Long, total: Long) -> Unit,
+    ) = downloadVerified(url, destination, ExpectedDigest("SHA-256", expectedSha256, base64 = false), onBytes)
+
+    private suspend fun downloadVerified(
+        url: String,
+        destination: File,
+        expected: ExpectedDigest,
         onBytes: suspend (downloaded: Long, total: Long) -> Unit,
     ) {
         destination.parentFile?.mkdirs()
@@ -836,8 +1003,7 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
             }
         }
         connection.disconnect()
-        val actual = sha256(temporary)
-        if (!actual.equals(expectedSha256, ignoreCase = true)) {
+        if (!expected.matches(temporary)) {
             temporary.delete()
             error("Downloaded file checksum did not match")
         }
@@ -845,26 +1011,13 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
         check(temporary.renameTo(destination)) { "Could not finish download" }
     }
 
-    private fun fetchText(url: String): String {
+    private fun fetchText(url: String, accept: String = "application/json"): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 15_000
         connection.readTimeout = 30_000
-        connection.setRequestProperty("Accept", "application/json")
+        connection.setRequestProperty("Accept", accept)
         check(connection.responseCode in 200..299) { "Request failed with HTTP ${connection.responseCode}" }
         return connection.inputStream.bufferedReader().use { it.readText() }.also { connection.disconnect() }
-    }
-
-    private fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun File.readTextOrNull(): String? = runCatching { readText().trim() }.getOrNull()
@@ -872,14 +1025,20 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
     companion object {
         private const val LEGACY_README = "# Pocket Dev project\n\nThis project is managed locally on Android.\n"
         private const val LEGACY_INDEX = "<!doctype html><title>Pocket Dev</title><h1>Hello from Android</h1>\n"
-        private const val ROOTFS_VERSION = "ubuntu-20.04.5-arm64"
-        private const val ROOTFS_FILE = "ubuntu-base-20.04.5-base-arm64.tar.gz"
-        private const val ROOTFS_URL = "https://cdimage.ubuntu.com/ubuntu-base/releases/20.04/release/$ROOTFS_FILE"
-        private const val ROOTFS_SHA256 = "f9b999afb4c4b10193087ea8c11be36d688f19e609b05179b571f29357954b52"
-        private const val NODE_VERSION = "v24.19.0"
         private const val LANGUAGE_TOOLS_VERSION = "node-v24.19.0-python3-v1"
         private const val CORE_TOOLS_VERSION = "core-v1"
         private const val SYSTEM_UPGRADE_VERSION = "ubuntu-maintenance-v1"
+        private val VERSION_PATTERN = Regex("[0-9]+\\.[0-9]+\\.[0-9]+")
+
+        /** Orders semantic versions numerically so 2.1.112 sorts above 2.1.99. */
+        private val SEMVER_ORDER = Comparator<String> { left, right ->
+            val a = left.split('.').map { it.toIntOrNull() ?: 0 }
+            val b = right.split('.').map { it.toIntOrNull() ?: 0 }
+            (0 until maxOf(a.size, b.size)).asSequence()
+                .map { (a.getOrElse(it) { 0 }).compareTo(b.getOrElse(it) { 0 }) }
+                .firstOrNull { it != 0 } ?: 0
+        }
+
         private const val MAX_TERMINAL_LINE = 500
         private const val MAX_COLLECTED_OUTPUT = 24_000
         private val ANSI_ESCAPE = Regex("\\u001B(?:\\[[0-?]*[ -/]*[@-~]|\\][^\\u0007]*(?:\\u0007|\\u001B\\\\))")

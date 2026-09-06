@@ -13,6 +13,8 @@ import com.anonamus.mobileagent.model.ProviderProfile
 import com.anonamus.mobileagent.model.RiskLevel
 import com.anonamus.mobileagent.model.RuntimeEvent
 import com.anonamus.mobileagent.model.ToolRequest
+import com.anonamus.mobileagent.data.WorkspaceLocations
+import com.anonamus.mobileagent.device.DeviceBridge
 import java.io.File
 import java.io.RandomAccessFile
 import java.security.MessageDigest
@@ -63,6 +65,9 @@ class ClaudeRuntimeBridge(
     private val secretFor: (ProviderProfile) -> String?,
 ) : RuntimeBridge {
     private val installer = RuntimeInstaller(context)
+    private val workspaceLocations =
+        WorkspaceLocations(context, com.anonamus.mobileagent.data.AppPreferences(context))
+    private val deviceBridge = DeviceBridge(context)
     private val eventBus = MutableSharedFlow<RuntimeEvent>(extraBufferCapacity = 64)
     override val events: Flow<RuntimeEvent> = eventBus
     private val pending = ConcurrentHashMap<String, PendingPermission>()
@@ -164,6 +169,10 @@ class ClaudeRuntimeBridge(
             if (userStopRequested) process.destroy()
             coroutineScope {
                 val permissionWatcher = launch { watchPermissionRequests(sessionId) }
+                // Serves `phone` calls from the guest for as long as the agent runs.
+                val deviceWatcher = launch {
+                    deviceBridge.serve(File(context.filesDir, "runtime-bridge"))
+                }
                 var lastDiagnostic = ""
                 val pendingOutput = StringBuilder()
                 val nativeProcess = process as? NativeSpawnProcess
@@ -211,6 +220,7 @@ class ClaudeRuntimeBridge(
                 val exit = process.waitFor()
                 Log.d("ClaudeBridge", "Process exited with code $exit")
                 permissionWatcher.cancelAndJoin()
+                deviceWatcher.cancelAndJoin()
                 pending.values.filter { it.request.sessionId == sessionId }.forEach { permission ->
                     permission.response.writeText("deny")
                     pending.remove(permission.request.approvalId)
@@ -640,7 +650,7 @@ class ClaudeRuntimeBridge(
     }
 
     private fun ensureWorkspace(projectId: String): File {
-        val base = File(context.filesDir, "workspaces/$projectId").apply { mkdirs() }.canonicalFile
+        val base = workspaceLocations.workspaceFor(projectId).canonicalFile
         val rootPath = projectRoots[projectId].orEmpty()
         if (rootPath.isBlank()) return base
         val selected = File(base, rootPath).canonicalFile

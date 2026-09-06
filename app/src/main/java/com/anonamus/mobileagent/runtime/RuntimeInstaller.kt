@@ -2,6 +2,10 @@ package com.anonamus.mobileagent.runtime
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.Build
+import android.os.Environment
+import com.anonamus.mobileagent.data.AppPreferences
+import com.anonamus.mobileagent.device.DeviceBridge
 import android.system.Os
 import java.io.BufferedInputStream
 import java.io.File
@@ -765,6 +769,13 @@ class RuntimeInstaller(private val context: Context) {
             add("${workspace.absolutePath}:$guestWorkspacePath")
             add("-b")
             add("${bridge.absolutePath}:/pocket-bridge")
+            // The user's real device storage, when they granted access during
+            // setup. PRoot binds it in place so the agent works on actual
+            // files instead of a copy it cannot share with any other app.
+            deviceStorageBinds().forEach { bind ->
+                add("-b")
+                add(bind)
+            }
             add("-w")
             add(guestWorkspacePath)
             addAll(guestCommand)
@@ -795,6 +806,31 @@ class RuntimeInstaller(private val context: Context) {
         )
     }
 
+
+    /**
+     * Bind specs exposing the user's real device storage inside the guest.
+     *
+     * Empty unless the user turned device access on during setup *and* the
+     * platform still reports the permission as granted — it can be revoked in
+     * system settings at any time, and binding a path we cannot read would
+     * make PRoot fail the whole launch.
+     */
+    private fun deviceStorageBinds(): List<String> {
+        val preferences = AppPreferences(context)
+        if (!preferences.deviceAccessEnabled) return emptyList()
+        val granted = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            Environment.isExternalStorageManager()
+        if (!granted) return emptyList()
+        val shared = Environment.getExternalStorageDirectory()
+        if (!shared.isDirectory) return emptyList()
+        return buildList {
+            add("${shared.absolutePath}:/sdcard")
+            // Ubuntu has no /storage, so give the agent the familiar Android
+            // path as well; scripts and docs reference both spellings.
+            add("${shared.absolutePath}:/storage/emulated/0")
+        }
+    }
+
     fun ensureSettingsAndHooks() {
         val hook = File(rootfs, "opt/pocket/permission-hook.sh")
         hook.parentFile?.mkdirs()
@@ -805,6 +841,14 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
 """,
         )
         Os.chmod(hook.absolutePath, 0b111101101)
+
+        // `phone` is how the agent reaches Android APIs from inside the guest.
+        // Rewritten on every launch so an app update always ships a matching
+        // client for the bridge protocol.
+        val phone = File(rootfs, "usr/local/bin/phone")
+        phone.parentFile?.mkdirs()
+        phone.writeText(DeviceBridge.phoneCommandScript())
+        Os.chmod(phone.absolutePath, 0b111101101)
 
         val settingsContent = JSONObject()
             .put("disableAllHooks", false)

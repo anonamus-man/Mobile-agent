@@ -653,7 +653,7 @@ private fun RuntimeSetupPromptScreen(
     }
 
     if (currentStep > 0) {
-        BackHandler { currentStep = 0 }
+        BackHandler { currentStep -= 1 }
     }
 
     Scaffold(
@@ -669,7 +669,7 @@ private fun RuntimeSetupPromptScreen(
                 },
                 navigationIcon = {
                     if (currentStep > 0) {
-                        IconButton(onClick = { currentStep = 0 }) {
+                        IconButton(onClick = { currentStep -= 1 }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                         }
                     }
@@ -929,6 +929,17 @@ private fun RuntimeSetupPromptScreen(
                         )
                     }
                 }
+            } else if (currentStep == 1) {
+                Text(
+                    "PROJECT LOCATION",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                ProjectLocationStep(onContinue = { currentStep = 2 })
+                Spacer(Modifier.height(24.dp))
             } else {
                 Text(
                     "TOOLCHAIN SETUP",

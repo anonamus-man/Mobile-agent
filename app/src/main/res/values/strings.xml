@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Mobile Agent</string>
+    <string name="device_control_description">Lets Mobile Agent read the screen and tap, swipe and type in other apps on your behalf. Only used when you ask the agent to control your phone.</string>
 </resources>

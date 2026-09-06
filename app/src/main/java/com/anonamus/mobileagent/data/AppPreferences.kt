@@ -33,6 +33,26 @@ class AppPreferences(private val context: Context) {
         get() = preferences.getString("theme_mode", "dark") ?: "dark"
         set(value) { preferences.edit().putString("theme_mode", value).apply() }
 
+    /** Name of a [com.anonamus.mobileagent.data.WorkspaceLocationKind]. */
+    var workspaceLocationKind: String
+        get() = preferences.getString("workspace_location_kind", "APP_PRIVATE") ?: "APP_PRIVATE"
+        set(value) { preferences.edit().putString("workspace_location_kind", value).apply() }
+
+    /** Absolute host path of the projects root; blank means app-private. */
+    var workspaceLocationPath: String
+        get() = preferences.getString("workspace_location_path", "") ?: ""
+        set(value) { preferences.edit().putString("workspace_location_path", value).apply() }
+
+    /** True once the user has been shown the project-location step. */
+    var workspaceLocationChosen: Boolean
+        get() = preferences.getBoolean("workspace_location_chosen", false)
+        set(value) { preferences.edit().putBoolean("workspace_location_chosen", value).apply() }
+
+    /** Expose the whole device filesystem to the agent as /sdcard. */
+    var deviceAccessEnabled: Boolean
+        get() = preferences.getBoolean("device_access_enabled", false)
+        set(value) { preferences.edit().putBoolean("device_access_enabled", value).apply() }
+
     var legacySeededCredentialRemoved: Boolean
         get() = preferences.getBoolean("legacy_seeded_credential_removed", false)
         set(value) { preferences.edit().putBoolean("legacy_seeded_credential_removed", value).apply() }
@@ -115,7 +135,7 @@ class AppPreferences(private val context: Context) {
                 if (slug != obj.optString("slug")) needsSave = true
                 var millis = obj.optLong("updatedAtMillis", 0L)
                 if (millis <= 0L) {
-                    val workspaceDir = File(context.filesDir, "workspaces/$id")
+                    val workspaceDir = WorkspaceLocations(context, this).workspaceFor(id)
                     millis = if (workspaceDir.exists() && workspaceDir.lastModified() > 0L) {
                         workspaceDir.lastModified()
                     } else {

@@ -43,7 +43,7 @@
 
 > [!IMPORTANT]
 > **Environment Security Notice**  
-> Mobile Harness runs on **ARM64 Android devices** using a private userspace PRoot layer. While isolated from other apps via standard Android sandbox permissions, PRoot is not a virtualization boundary or hardened security jail. Only execute projects and dependencies you own or trust.
+> Mobile Harness runs on **ARM64 and ARMv7 (32-bit) Android devices** using a private userspace PRoot layer. While isolated from other apps via standard Android sandbox permissions, PRoot is not a virtualization boundary or hardened security jail. Only execute projects and dependencies you own or trust.
 
 <br />
 
@@ -59,7 +59,7 @@ Mobile Harness unites modern **Jetpack Compose UI** with a self-contained **Ubun
     </td>
     <td width="50%" valign="top">
       <h3>Isolated Linux Subsystem</h3>
-      <p>A full Ubuntu 20.04 ARM64 userspace running inside PRoot. Includes Node.js, npm, Git, OpenSSL, and essential shell tooling out of the box.</p>
+      <p>A full Ubuntu 20.04 userspace running inside PRoot — arm64 or armhf, matched to your CPU. Includes Node.js, npm, Git, OpenSSL, and essential shell tooling out of the box.</p>
     </td>
   </tr>
   <tr>
@@ -122,10 +122,14 @@ Get up and running in 3 guided steps:
 Download the latest signed release APK from [GitHub Releases](https://github.com/techjarves/Mobile-Harness/releases/latest).
 
 ```text
-Target Architecture : ARM64 (arm64-v8a)
+Target Architecture : ARM64 (arm64-v8a) and ARMv7 (armeabi-v7a)
 Package Version     : v1.0.2
 Minimum OS Level    : Android 9.0 (API 28)
 ```
+
+> On 32-bit ARM the agent runs the JavaScript build of Claude Code, because
+> Anthropic publishes no `linux-arm` native binary. See
+> [32-bit support](docs/32-BIT-SUPPORT.md) for the full picture.
 
 ### 2. Guided Bootstrap (~10 Minutes)
 Launch the application and follow the interactive setup wizard:
@@ -190,7 +194,7 @@ flowchart TB
         Bridge["C++ JNI Process Bridge<br/>Native Launcher & Pipe Multiplexer"]
     end
 
-    subgraph Subsystem[" Private Linux Subsystem (PRoot ARM64) "]
+    subgraph Subsystem[" Private Linux Subsystem (PRoot · arm64 or armhf) "]
         Ubuntu["Ubuntu 20.04 LTS Subsystem<br/>Rootless Userspace Environment"]
         Agent["Claude Code CLI<br/>Autonomous Agent Harness"]
         Tools["Development Toolchains<br/>Node.js • Git • Python • C++"]
@@ -221,10 +225,15 @@ flowchart TB
 ```
 
 ### Core Runtime Components
-* **Base Environment**: Ubuntu 20.04 ARM64 verified rootfs
-* **Agent Engine**: Official Claude Code CLI package distributed directly from Anthropic
+* **Base Environment**: Ubuntu 20.04 verified rootfs — `arm64` on 64-bit devices, `armhf` on 32-bit
+* **Agent Engine**: Official Claude Code CLI from Anthropic — the signed native binary on ARM64, the npm JavaScript build on ARMv7
 * **Native Tooling**: Node.js LTS, npm, Git, OpenSSL, curl, and GNU coreutils
 * **Process Virtualization**: PRoot user-space architecture emulation with zero kernel modifications
+
+Because PRoot supervises the guest with `ptrace`, the guest userspace must match
+the bitness of the app process — a 32-bit tracer cannot drive a 64-bit tracee.
+Everything the installer fetches is therefore selected from the detected
+architecture; see [`docs/32-BIT-SUPPORT.md`](docs/32-BIT-SUPPORT.md).
 
 <br />
 
@@ -233,8 +242,8 @@ flowchart TB
 | Metric | Minimum Specification | Recommended Specification |
 | :--- | :--- | :--- |
 | **Operating System** | Android 9.0 (API level 28) | Android 13.0+ (API level 33+) |
-| **CPU Architecture** | 64-bit ARM (`arm64-v8a`) | High-performance 8-Core ARM64 (Snapdragon 8 Gen 1+ / Dimensity) |
-| **RAM** | 4 GB | 8 GB or more |
+| **CPU Architecture** | ARM — `arm64-v8a` or `armeabi-v7a` | High-performance 8-Core ARM64 (Snapdragon 8 Gen 1+ / Dimensity) |
+| **RAM** | 4 GB on ARM64 · 2 GB on ARMv7 | 8 GB or more |
 | **Free Storage** | 2.5 GB (Base Runtime) | 8.0 GB+ (For multi-language toolchains and build caches) |
 | **Network** | Stable connection for setup & API | High-speed Wi-Fi during initial rootfs provisioning |
 
@@ -262,8 +271,11 @@ flowchart TB
 git clone https://github.com/techjarves/Mobile-Harness.git
 cd Mobile-Harness
 
-# Build the standard ARM64 debug binary
+# Build the debug binary for both ARM ABIs
 ./gradlew assembleDebug
+
+# ...or narrow it to one architecture
+./gradlew assembleDebug -PmhAbis=armeabi-v7a
 
 # Deploy directly to a connected test device
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -333,7 +345,7 @@ Mobile-Harness/
 
 * **Zero Cloud Intermediaries**: Mobile Harness connects your device directly to your chosen AI endpoint. No intermediate relays or telemetry servers collect your prompts or code.
 * **Scoped Storage**: Project imports and exports utilize Android's official Storage Access Framework (SAF) instead of broad shared storage access.
-* **Cryptographic Checksums**: Root filesystem archives and Claude Code CLI packages are verified via SHA-256 checksums prior to extraction.
+* **Cryptographic Checksums**: Root filesystem archives and Claude Code packages are verified before extraction — SHA-256 for Ubuntu/Node.js/Anthropic downloads, and the registry SHA-512 integrity hash for the npm tarball used on ARMv7.
 * **Encrypted Secrets**: API tokens are encrypted in hardware-backed storage via Android Keystore.
 
 Read our complete [Privacy Policy](PRIVACY.md).
@@ -344,7 +356,8 @@ Read our complete [Privacy Policy](PRIVACY.md).
 
 ## Current Limitations
 
-* **Architecture**: Exclusively supports 64-bit ARM (`arm64-v8a`) hardware.
+* **Architecture**: ARM only (`arm64-v8a`, `armeabi-v7a`). x86/x86_64 devices and emulators are not supported.
+* **32-bit agent version**: ARMv7 devices run the last Claude Code release that shipped a JavaScript entry point, so the agent trails the ARM64 build. [Details](docs/32-BIT-SUPPORT.md).
 * **Process Isolation**: PRoot maps file systems and IDs in user space; it is not a cryptographically hardened container or VM.
 * **Terminal Emulation**: The process bridge handles standard CLI workflows and REPLs; specialized ncurses applications may experience minor layout artifacts.
 * **OS Process Management**: Heavy compilation workloads may be throttled if Android applies aggressive battery optimization. It is recommended to exempt Mobile Harness from battery optimization in device settings.

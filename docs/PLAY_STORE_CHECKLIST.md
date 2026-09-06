@@ -6,8 +6,8 @@ This checklist covers the Play-facing work for package `com.jarves.mh`. It does 
 
 - [x] Stable application ID: `com.jarves.mh`
 - [x] API 36 Play build switch
-- [x] ARM64-only native output for Play builds
-- [x] Android 16 KB page-size alignment verified for 64-bit libraries
+- [x] ARM-only native output for Play builds (`arm64-v8a` + `armeabi-v7a`; narrow with `-PmhAbis=`)
+- [x] Android 16 KB page-size alignment verified for the 64-bit libraries (ARMv7 links at the 4 KB ARM page size)
 - [x] Foreground-service types, permissions, and subtype descriptions declared
 - [x] Notification permission requested from a user action
 - [x] Cleartext network traffic limited to loopback preview hosts

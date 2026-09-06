@@ -94,8 +94,18 @@ class WorkspaceLocations(
     }
 
     /** Host directory for one project. */
-    fun workspaceFor(projectId: String): File =
-        File(projectsRoot(), projectId).apply { mkdirs() }
+    fun workspaceFor(projectId: String): File {
+        val preferred = File(projectsRoot(), projectId)
+        if (preferred.isDirectory) return preferred
+        // A project created before the location was changed keeps working from
+        // wherever its files actually are. Without this, switching the root
+        // would silently present every existing project as empty.
+        val existing = listOf(appPrivateRoot(), defaultSharedRoot())
+            .asSequence()
+            .map { File(it, projectId) }
+            .firstOrNull { it.isDirectory && !it.list().isNullOrEmpty() }
+        return (existing ?: preferred).apply { mkdirs() }
+    }
 
     /**
      * Human-readable path for the UI.

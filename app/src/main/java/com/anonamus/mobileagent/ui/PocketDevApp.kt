@@ -917,7 +917,7 @@ private fun RuntimeSetupPromptScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         Text(
-                            text = if (supportedCpu) "Continue to Tool Setup" else "Device not supported",
+                            text = if (supportedCpu) "Choose project location" else "Device not supported",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                         )

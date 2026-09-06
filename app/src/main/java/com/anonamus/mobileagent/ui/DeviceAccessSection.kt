@@ -45,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.anonamus.mobileagent.data.AppPreferences
+import com.anonamus.mobileagent.data.WorkspaceLocationKind
 import com.anonamus.mobileagent.data.WorkspaceLocations
 import com.anonamus.mobileagent.device.DeviceControlService
 import com.anonamus.mobileagent.device.DeviceNotificationService
@@ -71,6 +72,7 @@ fun DeviceAccessSection() {
     }
     var controlGranted by remember { mutableStateOf(DeviceControlService.isEnabled(context)) }
     var projectPath by remember { mutableStateOf(locations.displayPath()) }
+    var locationKind by remember { mutableStateOf(locations.activeKind()) }
 
     // System settings live in another activity, so the only reliable moment to
     // re-read these is when the user comes back to us.
@@ -82,6 +84,7 @@ fun DeviceAccessSection() {
                 notificationsGranted = DeviceNotificationService.isEnabled(context)
                 controlGranted = DeviceControlService.isEnabled(context)
                 projectPath = locations.displayPath()
+                locationKind = locations.activeKind()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -128,6 +131,60 @@ fun DeviceAccessSection() {
                 open(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, withPackage = true)
             },
         )
+
+        // Honours the promise made during setup that this can be changed later.
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    "New projects are created in",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.padding(top = 2.dp))
+                Text(
+                    projectPath,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.padding(top = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LocationChip(
+                        label = "Phone storage",
+                        selected = locationKind == WorkspaceLocationKind.SHARED_STORAGE,
+                        enabled = storageGranted,
+                    ) {
+                        locations.select(WorkspaceLocationKind.SHARED_STORAGE)
+                        preferences.deviceAccessEnabled = true
+                        locationKind = WorkspaceLocationKind.SHARED_STORAGE
+                        projectPath = locations.displayPath()
+                    }
+                    LocationChip(
+                        label = "App private",
+                        selected = locationKind == WorkspaceLocationKind.APP_PRIVATE,
+                        enabled = true,
+                    ) {
+                        locations.select(WorkspaceLocationKind.APP_PRIVATE)
+                        preferences.deviceAccessEnabled = false
+                        locationKind = WorkspaceLocationKind.APP_PRIVATE
+                        projectPath = locations.displayPath()
+                    }
+                }
+                Spacer(Modifier.padding(top = 6.dp))
+                Text(
+                    "Projects you already created stay where they are and keep working. " +
+                        "Restart a chat for a location change to take effect.",
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         AccessRow(
             icon = Icons.Default.Apps,
@@ -245,5 +302,30 @@ private fun AccessRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LocationChip(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val accent = if (selected) PocketGreen else MaterialTheme.colorScheme.onSurfaceVariant
+    Surface(
+        onClick = { if (enabled) onClick() },
+        enabled = enabled,
+        shape = RoundedCornerShape(9.dp),
+        color = if (selected) PocketGreen.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, if (selected) PocketGreen.copy(alpha = 0.5f) else Color.Transparent),
+    ) {
+        Text(
+            if (enabled) label else "$label (needs permission)",
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (enabled) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        )
     }
 }

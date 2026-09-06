@@ -96,7 +96,7 @@ import com.anonamus.mobileagent.ui.theme.AppThemeMode
 import com.anonamus.mobileagent.ui.theme.PocketOrange
 import kotlinx.coroutines.launch
 
-private enum class SettingsSection { CONNECTION, APPEARANCE, TOOLS, RUNTIME }
+private enum class SettingsSection { CONNECTION, APPEARANCE, TOOLS, DEVICE, RUNTIME }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -369,6 +369,18 @@ fun SettingsScreen(
                         }
                         if (index != DevStack.entries.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }
+                }
+            }
+
+            item {
+                SettingsAccordion(
+                    title = "Device access",
+                    subtitle = "Files, apps, notifications and screen control",
+                    icon = Icons.Default.PhoneAndroid,
+                    expanded = expanded == SettingsSection.DEVICE,
+                    onClick = { toggle(SettingsSection.DEVICE) },
+                ) {
+                    DeviceAccessSection()
                 }
             }
 

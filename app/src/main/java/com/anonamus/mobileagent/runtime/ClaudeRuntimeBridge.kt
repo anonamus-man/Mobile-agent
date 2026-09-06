@@ -15,6 +15,11 @@ import com.anonamus.mobileagent.model.RuntimeEvent
 import com.anonamus.mobileagent.model.ToolRequest
 import com.anonamus.mobileagent.data.WorkspaceLocations
 import com.anonamus.mobileagent.device.DeviceBridge
+import android.os.Build
+import android.os.Environment
+import com.anonamus.mobileagent.data.AppPreferences
+import com.anonamus.mobileagent.device.DeviceControlService
+import com.anonamus.mobileagent.device.DeviceNotificationService
 import java.io.File
 import java.io.RandomAccessFile
 import java.security.MessageDigest
@@ -599,6 +604,66 @@ class ClaudeRuntimeBridge(
             .take(600)
     }
 
+
+    /**
+     * Tells the agent which host capabilities are actually available.
+     *
+     * Built fresh on every turn and only advertises what is granted right now:
+     * a model told it can read notifications will confidently try, and a
+     * permission the user revoked would turn into a confusing failure loop.
+     * Capabilities that are off are listed as unavailable, with the exact
+     * setting the user must turn on, so the agent can say something useful
+     * instead of guessing.
+     */
+    private fun deviceCapabilityPrompt(): String {
+        val preferences = AppPreferences(context)
+        val storage = preferences.deviceAccessEnabled &&
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager())
+        val notifications = DeviceNotificationService.isEnabled(context)
+        val control = DeviceControlService.isEnabled(context)
+
+        val sb = StringBuilder()
+        sb.appendLine("<device_access>")
+        sb.appendLine("You are running on the user's Android phone inside a Linux guest.")
+        sb.appendLine("The `phone` command talks to Android itself. Output is JSON on stdout.")
+        sb.appendLine("Always available:")
+        sb.appendLine("  phone info                     device model, Android version, granted permissions")
+        sb.appendLine("  phone apps [--system]          installed apps")
+        sb.appendLine("  phone open <package>           launch an app")
+        sb.appendLine("  phone url <uri>                open a URL, tel: or mailto:")
+        sb.appendLine("  phone share <text>             share text via the system chooser")
+
+        if (storage) {
+            sb.appendLine("The user's real phone storage is mounted at /sdcard.")
+            sb.appendLine("Downloads, DCIM, Documents and everything else are readable and writable there.")
+            sb.appendLine("Treat it as the user's personal data: never delete or overwrite outside the project without being asked.")
+        } else {
+            sb.appendLine("/sdcard is NOT mounted. Only the project workspace is visible.")
+            sb.appendLine("To enable it the user picks Phone storage in Settings and grants All files access.")
+        }
+
+        if (notifications) {
+            sb.appendLine("  phone notifications            read the notification shade")
+        } else {
+            sb.appendLine("Notification reading is unavailable until the user enables Mobile Agent under Android Settings > Notifications > Device & app notifications.")
+        }
+
+        if (control) {
+            sb.appendLine("  phone screen                   dump on-screen text and tappable nodes with coordinates")
+            sb.appendLine("  phone tap <x> <y>              tap a coordinate")
+            sb.appendLine("  phone swipe <x1> <y1> <x2> <y2>")
+            sb.appendLine("  phone type <text>              type into the focused field")
+            sb.appendLine("  phone press <back|home|recents>")
+            sb.appendLine("When driving another app, run `phone screen` first and act on the coordinates it reports; never guess where something is.")
+        } else {
+            sb.appendLine("Screen control is unavailable until the user enables Mobile Agent under Android Settings > Accessibility.")
+        }
+        sb.appendLine("Other apps' private data (/data/data) cannot be reached on an unrooted phone. Say so plainly rather than attempting workarounds.")
+        sb.appendLine("</device_access>")
+        sb.appendLine()
+        return sb.toString()
+    }
+
     private fun buildContextPrompt(currentPrompt: String, history: List<ChatMessage>, guestWorkspacePath: String, projectKind: ProjectKind): String {
         // Filter out the current prompt (last user message), system greeting, and any error messages
         val priorMessages = history
@@ -624,6 +689,7 @@ class ClaudeRuntimeBridge(
         sb.appendLine("For local servers, give a clear start command and never use a kill command that searches its own command text with pgrep, because it can terminate the terminal itself.")
         sb.appendLine("</project_workspace>")
         sb.appendLine()
+        sb.append(deviceCapabilityPrompt())
         if (priorMessages.isEmpty()) {
             sb.appendLine(currentPrompt)
             return sb.toString()

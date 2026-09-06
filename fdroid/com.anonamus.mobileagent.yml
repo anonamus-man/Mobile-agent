@@ -1,0 +1,31 @@
+Categories:
+  - Development
+  - System
+License: MIT
+AuthorName: anonamus-man
+SourceCode: https://github.com/anonamus-man/Mobile-agent
+IssueTracker: https://github.com/anonamus-man/Mobile-agent/issues
+Changelog: https://github.com/anonamus-man/Mobile-agent/releases
+
+AutoName: Mobile Agent
+
+RepoType: git
+Repo: https://github.com/anonamus-man/Mobile-agent.git
+
+AntiFeatures:
+  - NonFreeNet
+
+Builds:
+  - versionName: 1.0.2
+    versionCode: 3
+    commit: v1.0.2
+    subdir: app
+    ndk: r26b
+    submodules: true
+    gradle:
+      - yes
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 1.0.2
+CurrentVersionCode: 3

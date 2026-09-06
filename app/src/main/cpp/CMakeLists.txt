@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(mobile_harness_native C ASM)
+project(mobile_agent_native C ASM)
 
-# Mobile Harness ships a PRoot userspace for both 64-bit and 32-bit ARM.
+# Mobile Agent ships a PRoot userspace for both 64-bit and 32-bit ARM.
 # Everything that differs between the two is captured here; the rest of this
 # file is ABI agnostic.
 #
@@ -28,7 +28,7 @@ elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
     set(MH_PAGE_ALIGNMENT 4096)
 else()
     message(FATAL_ERROR
-        "Mobile Harness supports arm64-v8a and armeabi-v7a; got '${ANDROID_ABI}'")
+        "Mobile Agent supports arm64-v8a and armeabi-v7a; got '${ANDROID_ABI}'")
 endif()
 
 set(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../..")
@@ -51,7 +51,7 @@ set_target_properties(talloc PROPERTIES OUTPUT_NAME talloc SOVERSION 2)
 
 add_library(android-shmem SHARED "${SHM_ROOT}/shmem.c")
 target_include_directories(android-shmem PUBLIC "${SHM_ROOT}")
-target_compile_definitions(android-shmem PRIVATE _PATH_TMP="/data/data/com.jarves.mh/cache/")
+target_compile_definitions(android-shmem PRIVATE _PATH_TMP="/data/data/com.anonamus.mobileagent/cache/")
 target_link_libraries(android-shmem PRIVATE log android)
 
 set(PROOT_SOURCES

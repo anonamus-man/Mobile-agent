@@ -13,7 +13,7 @@ val testSecrets = Properties().apply {
 val playBuild = providers.gradleProperty("playBuild").orNull?.toBoolean() == true ||
     providers.gradleProperty("playFeasibility").orNull?.toBoolean() == true
 val privacyPolicyUrl = providers.gradleProperty("privacyPolicyUrl").orNull
-    ?: "https://github.com/techjarves/Mobile-Harness/blob/main/PRIVACY.md"
+    ?: "https://github.com/anonamus-man/Mobile-agent/blob/main/PRIVACY.md"
 val uploadStorePath = providers.environmentVariable("MH_UPLOAD_STORE_FILE").orNull
 val uploadStorePassword = providers.environmentVariable("MH_UPLOAD_STORE_PASSWORD").orNull
 val uploadKeyAlias = providers.environmentVariable("MH_UPLOAD_KEY_ALIAS").orNull
@@ -29,7 +29,7 @@ fun buildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
-    namespace = "com.jarves.mh"
+    namespace = "com.anonamus.mobileagent"
     compileSdk = 36
     // F-Droid's r26b recipe installs 26.1.10909125. Keep AGP from selecting
     // its newer default NDK; local developers may override this explicitly.
@@ -47,7 +47,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.jarves.mh"
+        applicationId = "com.anonamus.mobileagent"
         minSdk = 28
         // The direct APK retains the proven target-28 PRoot execution path. The
         // Play build targets current Android while its runtime path is validated.
@@ -125,7 +125,7 @@ android {
 
 tasks.register("playReadinessCheck") {
     group = "verification"
-    description = "Checks configuration required before uploading a Mobile Harness Play bundle."
+    description = "Checks configuration required before uploading a Mobile Agent Play bundle."
     doLast {
         check(playBuild) { "Run with -PplayBuild=true." }
         check(privacyPolicyUrl.startsWith("https://")) {

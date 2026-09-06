@@ -1,6 +1,6 @@
 # 32-bit ARM support
 
-Mobile Harness builds and runs on `armeabi-v7a` (ARMv7, 32-bit) in addition to
+Mobile Agent builds and runs on `armeabi-v7a` (ARMv7, 32-bit) in addition to
 `arm64-v8a`. This document explains what had to change, what works, and what is
 genuinely different on a 32-bit device.
 

@@ -1,8 +1,8 @@
 <div align="center">
 
-  <img src="assets/readme/logo.svg" alt="Mobile Harness Logo" width="104" height="104" style="border-radius: 24px;" />
+  <img src="assets/readme/logo.svg" alt="Mobile Agent Logo" width="104" height="104" style="border-radius: 24px;" />
 
-  # Mobile Harness
+  # Mobile Agent
 
   ### *The complete autonomous AI development workspace for Android.*
 
@@ -10,15 +10,15 @@
 
   <br />
 
-  [![Release](https://img.shields.io/github/v/release/techjarves/Mobile-Harness?style=for-the-badge&color=161b22&labelColor=0d1117&logo=github)](https://github.com/techjarves/Mobile-Harness/releases/latest)
+  [![Release](https://img.shields.io/github/v/release/anonamus-man/Mobile-agent?style=for-the-badge&color=161b22&labelColor=0d1117&logo=github)](https://github.com/anonamus-man/Mobile-agent/releases/latest)
   [![Platform](https://img.shields.io/badge/Platform-Android_9%2B-161b22?style=for-the-badge&logo=android&logoColor=3DDC84&labelColor=0d1117)](#system-requirements)
   [![License](https://img.shields.io/badge/License-MIT-161b22?style=for-the-badge&logo=opensourceinitiative&logoColor=white&labelColor=0d1117)](LICENSE)
-  [![YouTube](https://img.shields.io/badge/Demo-Tech_Jarves-161b22?style=for-the-badge&logo=youtube&logoColor=FF0000&labelColor=0d1117)](https://www.youtube.com/techjarves)
+  [![ABI](https://img.shields.io/badge/ABI-arm64--v8a_%2B_armeabi--v7a-161b22?style=for-the-badge&logo=arm&logoColor=0091BD&labelColor=0d1117)](docs/32-BIT-SUPPORT.md)
 
   <br />
 
-  [**Download Latest APK (v1.0.2)**](https://github.com/techjarves/Mobile-Harness/releases/latest) &nbsp;•&nbsp;
-  [**Watch Walkthrough (3 min)**](https://youtu.be/QzAau52Z7yQ) &nbsp;•&nbsp;
+  [**Releases**](https://github.com/anonamus-man/Mobile-agent/releases) &nbsp;•&nbsp;
+  [**32-bit support**](docs/32-BIT-SUPPORT.md) &nbsp;•&nbsp;
   [**Quickstart Guide**](#quickstart) &nbsp;•&nbsp;
   [**Architecture**](#architecture) &nbsp;•&nbsp;
   [**Build from Source**](#developer-guides)
@@ -31,10 +31,10 @@
 
 <p align="center">
   <a href="https://youtu.be/QzAau52Z7yQ" target="_blank" rel="noopener noreferrer">
-    <img src="https://img.youtube.com/vi/QzAau52Z7yQ/maxresdefault.jpg" alt="Mobile Harness Walkthrough and Live Product Demo" width="920" />
+    <img src="https://img.youtube.com/vi/QzAau52Z7yQ/maxresdefault.jpg" alt="Walkthrough and live product demo" width="920" />
   </a>
   <br />
-  <sub>Watch the product walkthrough and demo &nbsp;|&nbsp; <i>Setting up Ubuntu, connecting Claude Code, and building an app on Android</i></sub>
+  <sub>Walkthrough of the upstream project &nbsp;|&nbsp; <i>Setting up Ubuntu, connecting Claude Code, and building an app on Android</i></sub>
 </p>
 
 ---
@@ -43,13 +43,13 @@
 
 > [!IMPORTANT]
 > **Environment Security Notice**  
-> Mobile Harness runs on **ARM64 and ARMv7 (32-bit) Android devices** using a private userspace PRoot layer. While isolated from other apps via standard Android sandbox permissions, PRoot is not a virtualization boundary or hardened security jail. Only execute projects and dependencies you own or trust.
+> Mobile Agent runs on **ARM64 and ARMv7 (32-bit) Android devices** using a private userspace PRoot layer. While isolated from other apps via standard Android sandbox permissions, PRoot is not a virtualization boundary or hardened security jail. Only execute projects and dependencies you own or trust.
 
 <br />
 
 ## Capabilities
 
-Mobile Harness unites modern **Jetpack Compose UI** with a self-contained **Ubuntu 20.04 LTS subsystem**. It gives you a desktop-class software development environment in your pocket without requiring root access, unlocked bootloaders, or external applications like Termux.
+Mobile Agent unites modern **Jetpack Compose UI** with a self-contained **Ubuntu 20.04 LTS subsystem**. It gives you a desktop-class software development environment in your pocket without requiring root access, unlocked bootloaders, or external applications like Termux.
 
 <table>
   <tr>
@@ -119,7 +119,7 @@ Mobile Harness unites modern **Jetpack Compose UI** with a self-contained **Ubun
 Get up and running in 3 guided steps:
 
 ### 1. Download & Install
-Download the latest signed release APK from [GitHub Releases](https://github.com/techjarves/Mobile-Harness/releases/latest).
+Download the latest signed release APK from [GitHub Releases](https://github.com/anonamus-man/Mobile-agent/releases/latest), or build it yourself with the instructions below.
 
 ```text
 Target Architecture : ARM64 (arm64-v8a) and ARMv7 (armeabi-v7a)
@@ -167,7 +167,7 @@ Launch the application and follow the interactive setup wizard:
 
 ## Model Providers
 
-Mobile Harness uses Claude Code's Anthropic-compatible API protocol. You can connect official endpoints or route requests through compatible translation proxies:
+Mobile Agent uses Claude Code's Anthropic-compatible API protocol. You can connect official endpoints or route requests through compatible translation proxies:
 
 | Provider | Integration Type | Streaming | Tool Calling | Status | Notes |
 | :--- | :---: | :---: | :---: | :---: | :--- |
@@ -183,7 +183,7 @@ Mobile Harness uses Claude Code's Anthropic-compatible API protocol. You can con
 
 ## Architecture
 
-Mobile Harness bridges native Android Jetpack Compose to an isolated PRoot Linux execution layer via an optimized C++ JNI bridge:
+Mobile Agent bridges native Android Jetpack Compose to an isolated PRoot Linux execution layer via an optimized C++ JNI bridge:
 
 ```mermaid
 flowchart TB
@@ -268,8 +268,8 @@ architecture; see [`docs/32-BIT-SUPPORT.md`](docs/32-BIT-SUPPORT.md).
 ### Clone & Build Debug APK
 ```bash
 # Clone the repository
-git clone https://github.com/techjarves/Mobile-Harness.git
-cd Mobile-Harness
+git clone --recurse-submodules https://github.com/anonamus-man/Mobile-agent.git
+cd Mobile-agent
 
 # Build the debug binary for both ARM ABIs
 ./gradlew assembleDebug
@@ -305,7 +305,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 <br />
 
-Mobile Harness allows downloading optional developer packs on demand to conserve space:
+Mobile Agent allows downloading optional developer packs on demand to conserve space:
 
 * **Python Suite**: Python 3.10+, pip, virtualenv, and essential scientific C-extensions.
 * **Android & JVM**: OpenJDK 17 headless runtime and Gradle build tools.
@@ -322,7 +322,7 @@ Mobile Harness allows downloading optional developer packs on demand to conserve
 <br />
 
 ```text
-Mobile-Harness/
+Mobile-agent/
 ├── app/src/main/
 │   ├── java/com/jarves/mh/
 │   │   ├── data/       # Preferences, Keystore AES encryption, SQLite persistence
@@ -343,7 +343,7 @@ Mobile-Harness/
 
 <br />
 
-* **Zero Cloud Intermediaries**: Mobile Harness connects your device directly to your chosen AI endpoint. No intermediate relays or telemetry servers collect your prompts or code.
+* **Zero Cloud Intermediaries**: Mobile Agent connects your device directly to your chosen AI endpoint. No intermediate relays or telemetry servers collect your prompts or code.
 * **Scoped Storage**: Project imports and exports utilize Android's official Storage Access Framework (SAF) instead of broad shared storage access.
 * **Cryptographic Checksums**: Root filesystem archives and Claude Code packages are verified before extraction — SHA-256 for Ubuntu/Node.js/Anthropic downloads, and the registry SHA-512 integrity hash for the npm tarball used on ARMv7.
 * **Encrypted Secrets**: API tokens are encrypted in hardware-backed storage via Android Keystore.
@@ -360,13 +360,13 @@ Read our complete [Privacy Policy](PRIVACY.md).
 * **32-bit agent version**: ARMv7 devices run the last Claude Code release that shipped a JavaScript entry point, so the agent trails the ARM64 build. [Details](docs/32-BIT-SUPPORT.md).
 * **Process Isolation**: PRoot maps file systems and IDs in user space; it is not a cryptographically hardened container or VM.
 * **Terminal Emulation**: The process bridge handles standard CLI workflows and REPLs; specialized ncurses applications may experience minor layout artifacts.
-* **OS Process Management**: Heavy compilation workloads may be throttled if Android applies aggressive battery optimization. It is recommended to exempt Mobile Harness from battery optimization in device settings.
+* **OS Process Management**: Heavy compilation workloads may be throttled if Android applies aggressive battery optimization. It is recommended to exempt Mobile Agent from battery optimization in device settings.
 
 <br />
 
 ## Legal & Trademarks
 
-* Mobile Harness is an independent open-source project and is not affiliated with, endorsed by, or sponsored by Anthropic.
+* Mobile Agent is an independent open-source project and is not affiliated with, endorsed by, or sponsored by Anthropic.
 * **Claude** and **Claude Code** are trademarks of Anthropic, PBC. Claude Code CLI is downloaded directly from Anthropic's official distribution endpoints during setup and remains governed by Anthropic's license terms.
 * Ubuntu, Android, Kotlin, Node.js, Git, and other registered trademarks belong to their respective copyright holders.
 * Third-party open-source licenses are compiled in [`app/src/main/assets/licenses`](app/src/main/assets/licenses).
@@ -386,3 +386,18 @@ This project is licensed under the [MIT License](LICENSE). Third-party runtime b
   <br />
   <sub>Copyright © 2026 Tech Jarves. All rights reserved.</sub>
 </div>
+
+---
+
+## Credits
+
+Mobile Agent is a fork of [**Mobile Harness**](https://github.com/techjarves/Mobile-Harness)
+by [TechJarves](https://github.com/techjarves), released under the MIT licence and
+retained in [`LICENSE`](LICENSE). This fork adds 32-bit ARM (`armeabi-v7a`) support —
+see [`docs/32-BIT-SUPPORT.md`](docs/32-BIT-SUPPORT.md) — and the walkthrough video
+above is the upstream project's.
+
+Bundled third-party components keep their own licences:
+[PRoot](https://github.com/termux/proot) (GPL-2.0),
+[libandroid-shmem](https://github.com/termux/libandroid-shmem) (BSD-3-Clause),
+and [talloc](https://talloc.samba.org/) (LGPL-3.0-or-later).

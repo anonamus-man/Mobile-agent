@@ -59,7 +59,17 @@ android {
         providers.gradleProperty("appVersionCode").orNull?.toIntOrNull()?.let { versionCode = it }
         providers.gradleProperty("appVersionName").orNull?.let { versionName = it }
 
-        ndk.abiFilters += "arm64-v8a"
+        // Both ARM ABIs are supported. `-PmhAbis=arm64-v8a` (or armeabi-v7a)
+        // narrows the build when a single-architecture artifact is wanted.
+        val requestedAbis = providers.gradleProperty("mhAbis").orNull
+            ?.split(',')
+            ?.map(String::trim)
+            ?.filter(String::isNotEmpty)
+            ?: listOf("arm64-v8a", "armeabi-v7a")
+        require(requestedAbis.all { it in setOf("arm64-v8a", "armeabi-v7a") }) {
+            "mhAbis supports arm64-v8a and armeabi-v7a only; got $requestedAbis"
+        }
+        ndk.abiFilters += requestedAbis
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

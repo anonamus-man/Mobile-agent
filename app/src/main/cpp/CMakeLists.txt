@@ -1,8 +1,34 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(mobile_harness_native C ASM)
 
-if(NOT ANDROID_ABI STREQUAL "arm64-v8a")
-    message(FATAL_ERROR "Mobile Harness currently supports only arm64-v8a")
+# Mobile Harness ships a PRoot userspace for both 64-bit and 32-bit ARM.
+# Everything that differs between the two is captured here; the rest of this
+# file is ABI agnostic.
+#
+#   MH_LOADER_ADDRESS  matches LOADER_ADDRESS in third_party/proot/src/arch.h.
+#                      PRoot maps its loader at this fixed address, so it must
+#                      be inside the tracee's address space: a 64-bit constant
+#                      is unmappable in a 32-bit process.
+#   MH_POKEDATA_WORKAROUND
+#                      HAS_POKEDATA_WORKAROUND in arch.h is defined for ARM64
+#                      only. The workaround stub (pokedata_workaround) lives in
+#                      loader/assembly.S behind `#if defined(__aarch64__)`, and
+#                      loader-info.c exists purely to record its offset, so
+#                      neither may be referenced on 32-bit ARM.
+#   MH_PAGE_ALIGNMENT  Android's 16 KB page-size requirement applies to 64-bit
+#                      libraries. ARMv7 kernels are 4 KB only; padding to 16 KB
+#                      just inflates the APK.
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    set(MH_LOADER_ADDRESS "0x2000000000")
+    set(MH_POKEDATA_WORKAROUND ON)
+    set(MH_PAGE_ALIGNMENT 16384)
+elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(MH_LOADER_ADDRESS "0x20000000")
+    set(MH_POKEDATA_WORKAROUND OFF)
+    set(MH_PAGE_ALIGNMENT 4096)
+else()
+    message(FATAL_ERROR
+        "Mobile Harness supports arm64-v8a and armeabi-v7a; got '${ANDROID_ABI}'")
 endif()
 
 set(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../..")
@@ -76,22 +102,37 @@ target_include_directories(prootloader PRIVATE "${PROOT_ROOT}")
 target_compile_options(prootloader PRIVATE -fPIC -ffreestanding)
 target_link_options(prootloader PRIVATE
     -static -nostdlib
-    "-Wl,--build-id=none,--rosegment,-Ttext=0x2000000000,-z,noexecstack,-u,pokedata_workaround"
+    "-Wl,--build-id=none,--rosegment,-Ttext=${MH_LOADER_ADDRESS},-z,noexecstack"
 )
+if(MH_POKEDATA_WORKAROUND)
+    target_link_options(prootloader PRIVATE "-Wl,-u,pokedata_workaround")
+endif()
 set_target_properties(prootloader PROPERTIES OUTPUT_NAME "prootloader-bin" SUFFIX "")
 
-add_custom_command(
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/loader-info.c"
-    COMMAND "${CMAKE_COMMAND}"
-        "-DREADELF=${CMAKE_READELF}"
-        "-DLOADER=$<TARGET_FILE:prootloader>"
-        "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/loader-info.c"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/GenerateLoaderInfo.cmake"
-    DEPENDS prootloader "${CMAKE_CURRENT_SOURCE_DIR}/GenerateLoaderInfo.cmake"
-    VERBATIM
-)
+# Only ARM64 defines HAS_POKEDATA_WORKAROUND, so only ARM64 needs the generated
+# offset table. On 32-bit ARM the loader has no such symbol and PRoot never
+# references it.
+if(MH_POKEDATA_WORKAROUND)
+    add_custom_command(
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/loader-info.c"
+        COMMAND "${CMAKE_COMMAND}"
+            "-DREADELF=${CMAKE_READELF}"
+            "-DLOADER=$<TARGET_FILE:prootloader>"
+            "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/loader-info.c"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/GenerateLoaderInfo.cmake"
+        DEPENDS prootloader "${CMAKE_CURRENT_SOURCE_DIR}/GenerateLoaderInfo.cmake"
+        VERBATIM
+    )
+    set(PROOT_GENERATED_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/loader-info.c")
+else()
+    set(PROOT_GENERATED_SOURCES "")
+    add_custom_target(prootloader-ready DEPENDS prootloader)
+endif()
 
-add_executable(proot ${PROOT_SOURCES} "${CMAKE_CURRENT_BINARY_DIR}/loader-info.c")
+add_executable(proot ${PROOT_SOURCES} ${PROOT_GENERATED_SOURCES})
+if(NOT MH_POKEDATA_WORKAROUND)
+    add_dependencies(proot prootloader-ready)
+endif()
 target_include_directories(proot PRIVATE
     "${PROOT_ROOT}"
     "${CMAKE_CURRENT_BINARY_DIR}"
@@ -131,5 +172,5 @@ add_custom_command(TARGET prootloader-carrier POST_BUILD
 )
 
 foreach(target pocketspawn talloc android-shmem proot proot-carrier prootloader-carrier)
-    target_link_options(${target} PRIVATE "-Wl,-z,max-page-size=16384")
+    target_link_options(${target} PRIVATE "-Wl,-z,max-page-size=${MH_PAGE_ALIGNMENT}")
 endforeach()

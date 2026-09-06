@@ -324,7 +324,7 @@ Mobile Agent allows downloading optional developer packs on demand to conserve s
 ```text
 Mobile-agent/
 ├── app/src/main/
-│   ├── java/com/jarves/mh/
+│   ├── java/com/sid/agent/
 │   │   ├── data/       # Preferences, Keystore AES encryption, SQLite persistence
 │   │   ├── model/      # Data entities: Projects, Chats, Diffs, Tool calls
 │   │   ├── runtime/    # PRoot installer, C++ agent bridge, foreground services
@@ -384,7 +384,7 @@ This project is licensed under the [MIT License](LICENSE). Third-party runtime b
 <div align="center">
   <sub>Crafted for developers who want a serious, uncompromised development environment wherever they go.</sub>
   <br />
-  <sub>Copyright © 2026 Tech Jarves. All rights reserved.</sub>
+  <sub>Released under the MIT licence. See <a href="LICENSE">LICENSE</a>.</sub>
 </div>
 
 ---

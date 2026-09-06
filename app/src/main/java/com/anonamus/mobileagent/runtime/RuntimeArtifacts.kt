@@ -45,6 +45,22 @@ internal object RuntimeArtifacts {
         add("ca-certificates")
         // Claude Code bundles ripgrep for arm64/x64 only; ARMv7 uses the distro build.
         if (arch.claudeDelivery == ClaudeDelivery.NODE_PACKAGE) add("ripgrep")
+        addAll(nodeRuntimeAptPackages(arch))
+    }
+
+    /**
+     * Shared libraries the official Node.js build for [arch] links against but
+     * `ubuntu-base` does not ship.
+     *
+     * ARMv7 has no native 64-bit atomic instructions, so V8 resolves them
+     * through libatomic; the aarch64 build has the instructions and does not
+     * link it. `ubuntu-base` carries libstdc++6 and libgcc-s1 already, but
+     * never libatomic1, so the armhf `node` binary dies at startup with
+     * "error while loading shared libraries: libatomic.so.1".
+     */
+    fun nodeRuntimeAptPackages(arch: HostArch): List<String> = when (arch) {
+        HostArch.ARM32 -> listOf("libatomic1")
+        HostArch.ARM64 -> emptyList()
     }
 
     /**

@@ -70,4 +70,37 @@ class RuntimeArtifactsTest {
         assertEquals(ClaudeDelivery.NATIVE_BINARY, HostArch.ARM64.claudeDelivery)
         assertEquals(ClaudeDelivery.NODE_PACKAGE, HostArch.ARM32.claudeDelivery)
     }
+
+    @Test
+    fun `armv7 pulls in libatomic for the node binary`() {
+        // node linux-armv7l has a DT_NEEDED on libatomic.so.1 because ARMv7
+        // lacks native 64-bit atomics, and ubuntu-base armhf does not ship it.
+        assertTrue(RuntimeArtifacts.nodeRuntimeAptPackages(HostArch.ARM32).contains("libatomic1"))
+    }
+
+    @Test
+    fun `arm64 does not need libatomic`() {
+        assertTrue(RuntimeArtifacts.nodeRuntimeAptPackages(HostArch.ARM64).isEmpty())
+    }
+
+    @Test
+    fun `core packages carry the node runtime dependencies`() {
+        val armv7 = RuntimeArtifacts.coreAptPackages(HostArch.ARM32)
+        assertTrue(armv7.contains("git"))
+        assertTrue(armv7.contains("ripgrep"))
+        assertTrue(armv7.contains("libatomic1"))
+
+        val arm64 = RuntimeArtifacts.coreAptPackages(HostArch.ARM64)
+        assertTrue(arm64.contains("git"))
+        assertFalse(arm64.contains("libatomic1"))
+        assertFalse(arm64.contains("ripgrep"))
+    }
+
+    @Test
+    fun `core package list has no duplicates`() {
+        HostArch.entries.forEach { arch ->
+            val packages = RuntimeArtifacts.coreAptPackages(arch)
+            assertEquals(packages.size, packages.distinct().size)
+        }
+    }
 }

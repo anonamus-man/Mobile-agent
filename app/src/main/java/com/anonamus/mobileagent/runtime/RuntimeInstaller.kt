@@ -183,6 +183,17 @@ class RuntimeInstaller(private val context: Context) {
             )
             writeResolver()
             verifyGuest(proot, "git --version", "Base tools could not be verified")
+            // On the JavaScript channel the agent *is* Node, so prove the
+            // interpreter actually starts here. Otherwise a missing shared
+            // library only surfaces at first launch, long after setup has
+            // reported success.
+            if (arch.claudeDelivery == ClaudeDelivery.NODE_PACKAGE) {
+                verifyGuest(
+                    proot,
+                    "node --version",
+                    "Node.js could not be started inside the Linux environment",
+                )
+            }
             coreToolsMarker.writeText(CORE_TOOLS_VERSION)
         }
 
@@ -1026,7 +1037,7 @@ printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decis
         private const val LEGACY_README = "# Pocket Dev project\n\nThis project is managed locally on Android.\n"
         private const val LEGACY_INDEX = "<!doctype html><title>Pocket Dev</title><h1>Hello from Android</h1>\n"
         private const val LANGUAGE_TOOLS_VERSION = "node-v24.19.0-python3-v1"
-        private const val CORE_TOOLS_VERSION = "core-v1"
+        private const val CORE_TOOLS_VERSION = "core-v2"
         private const val SYSTEM_UPGRADE_VERSION = "ubuntu-maintenance-v1"
         private val VERSION_PATTERN = Regex("[0-9]+\\.[0-9]+\\.[0-9]+")
 

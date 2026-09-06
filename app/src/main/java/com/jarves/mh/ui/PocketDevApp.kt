@@ -177,6 +177,7 @@ import com.jarves.mh.model.ProviderProfile
 import com.jarves.mh.model.ToolRequest
 import com.jarves.mh.model.WorkspaceEntry
 import com.jarves.mh.model.projectSlug
+import com.jarves.mh.runtime.HostArchitecture
 import com.jarves.mh.runtime.RuntimeExecutionService
 import com.jarves.mh.runtime.RuntimeSetupService
 import androidx.compose.foundation.rememberScrollState
@@ -632,8 +633,12 @@ private fun RuntimeSetupPromptScreen(
     val activityManager = context.getSystemService(ActivityManager::class.java)
     val memoryInfo = remember { ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo) }
     val totalRamGb = memoryInfo.totalMem / 1_073_741_824L
-    val arm64 = Build.SUPPORTED_64_BIT_ABIS.any { it == "arm64-v8a" }
-    val compatible = arm64 && totalRamGb >= 4
+    // The guest userspace must match the bitness of this process, so the memory
+    // floor follows the architecture: ARMv7 devices are smaller by definition.
+    val hostArch = HostArchitecture.current
+    val requiredRamGb = hostArch?.minimumRamGb ?: 4
+    val supportedCpu = hostArch != null
+    val compatible = supportedCpu && totalRamGb >= requiredRamGb
 
     var currentStep by remember { mutableIntStateOf(0) }
     val setupScrollState = rememberScrollState()
@@ -752,14 +757,14 @@ private fun RuntimeSetupPromptScreen(
                             icon = Icons.Default.Memory,
                             label = "Memory (RAM)",
                             value = "$totalRamGb GB · ${if (totalRamGb >= 8) "Full mode (8GB+)" else "Lite mode"}",
-                            statusOk = totalRamGb >= 4,
+                            statusOk = totalRamGb >= requiredRamGb,
                         )
 
                         SpecRow(
                             icon = Icons.Default.Code,
                             label = "Processor",
-                            value = Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a",
-                            statusOk = arm64,
+                            value = HostArchitecture.displayName,
+                            statusOk = supportedCpu,
                         )
 
                         SpecRow(
@@ -1586,14 +1591,16 @@ private fun DeviceCheckStep(context: Context, onContinue: () -> Unit) {
     val activityManager = context.getSystemService(ActivityManager::class.java)
     val memoryInfo = remember { ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo) }
     val totalRamGb = memoryInfo.totalMem / 1_073_741_824L
-    val arm64 = Build.SUPPORTED_64_BIT_ABIS.any { it == "arm64-v8a" }
-    val compatible = arm64 && totalRamGb >= 4
+    val hostArch = HostArchitecture.current
+    val requiredRamGb = hostArch?.minimumRamGb ?: 4
+    val supportedCpu = hostArch != null
+    val compatible = supportedCpu && totalRamGb >= requiredRamGb
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
         BrandMark()
         Text("Your phone is the workspace", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Mobile Harness checks compatibility before downloading the private Linux runtime.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        CheckRow(Icons.Default.Memory, "Memory", "$totalRamGb GB · ${if (totalRamGb >= 8) "Full mode" else "Lite mode"}", totalRamGb >= 4)
-        CheckRow(Icons.Default.Code, "Processor", Build.SUPPORTED_ABIS.firstOrNull() ?: "Unknown", arm64)
+        CheckRow(Icons.Default.Memory, "Memory", "$totalRamGb GB · ${if (totalRamGb >= 8) "Full mode" else "Lite mode"}", totalRamGb >= requiredRamGb)
+        CheckRow(Icons.Default.Code, "Processor", HostArchitecture.displayName, supportedCpu)
         CheckRow(Icons.Default.Storage, "Android", "Android ${Build.VERSION.RELEASE}", true)
         Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(16.dp)) {
             Text(

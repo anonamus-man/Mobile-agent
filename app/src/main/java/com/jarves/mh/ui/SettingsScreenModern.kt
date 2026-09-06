@@ -90,6 +90,8 @@ import com.jarves.mh.model.ProviderProfile
 import com.jarves.mh.network.ConnectionValidation
 import com.jarves.mh.network.DiscoveredModel
 import com.jarves.mh.network.ModelDiscoveryResult
+import com.jarves.mh.runtime.HostArchitecture
+import com.jarves.mh.runtime.RuntimeDescription
 import com.jarves.mh.ui.theme.AppThemeMode
 import com.jarves.mh.ui.theme.PocketOrange
 import kotlinx.coroutines.launch
@@ -373,14 +375,14 @@ fun SettingsScreen(
             item {
                 SettingsAccordion(
                     title = "Linux runtime",
-                    subtitle = "Ubuntu 20.04 PRoot · ARM64",
+                    subtitle = "Ubuntu 20.04 PRoot · ${HostArchitecture.current?.name ?: "Unsupported CPU"}",
                     icon = Icons.Default.Terminal,
                     expanded = expanded == SettingsSection.RUNTIME,
                     onClick = { toggle(SettingsSection.RUNTIME) },
                 ) {
-                    RuntimeInfoRow("Architecture", "ARM64 (aarch64)")
+                    RuntimeInfoRow("Architecture", HostArchitecture.displayName)
                     RuntimeInfoRow("Environment", "Ubuntu 20.04 PRoot")
-                    RuntimeInfoRow("Agent", "Claude Code + Node.js 24")
+                    RuntimeInfoRow("Agent", RuntimeDescription.agentSummary())
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = { onClearTerminal(); terminalCleared = true },

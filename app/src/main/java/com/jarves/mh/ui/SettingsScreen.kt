@@ -87,6 +87,8 @@ import com.jarves.mh.model.ProviderProfile
 import com.jarves.mh.network.ConnectionValidation
 import com.jarves.mh.network.DiscoveredModel
 import com.jarves.mh.network.ModelDiscoveryResult
+import com.jarves.mh.runtime.HostArchitecture
+import com.jarves.mh.runtime.RuntimeDescription
 import com.jarves.mh.ui.theme.AppThemeMode
 import com.jarves.mh.ui.theme.PocketGreen
 import com.jarves.mh.ui.theme.PocketOrange
@@ -653,11 +655,15 @@ private fun LegacySettingsScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        InfoRow(icon = Icons.Default.Memory, label = "Architecture", value = "ARM64 (aarch64)")
+                        InfoRow(icon = Icons.Default.Memory, label = "Architecture", value = HostArchitecture.displayName)
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         InfoRow(icon = Icons.Default.Terminal, label = "Linux Rootfs", value = "Ubuntu 20.04 PRoot")
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        InfoRow(icon = Icons.Default.SmartToy, label = "Developer tools", value = "Claude Code + Node.js 24 + Python 3")
+                        InfoRow(
+                            icon = Icons.Default.SmartToy,
+                            label = "Developer tools",
+                            value = RuntimeDescription.developerTools(),
+                        )
 
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(

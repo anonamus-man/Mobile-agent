@@ -33,6 +33,7 @@ import com.jarves.mh.network.ProviderApiClient
 import com.jarves.mh.runtime.ClaudeRuntimeBridge
 import com.jarves.mh.runtime.NativeSpawnProcess
 import com.jarves.mh.runtime.RuntimeInstallProgress
+import com.jarves.mh.runtime.RuntimeDescription
 import com.jarves.mh.runtime.RuntimeInstaller
 import com.jarves.mh.runtime.RuntimeSetupController
 import com.jarves.mh.runtime.RuntimeSetupService
@@ -226,7 +227,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         listOf(
             TerminalOutputLine(
                 command = "uname -a",
-                output = "Linux pocket-dev 6.1.0-arm64 #1 SMP aarch64 GNU/Linux (PRoot Sandbox)",
+                output = RuntimeDescription.unameBanner(),
                 exitCode = 0,
             ),
         ),

@@ -131,6 +131,37 @@ Minimum OS Level    : Android 9.0 (API 28)
 > Anthropic publishes no `linux-arm` native binary. See
 > [32-bit support](docs/32-BIT-SUPPORT.md) for the full picture.
 
+<br />
+
+> [!IMPORTANT]
+> **On Android 13, 14 and 15 you will see "This app was built for an older
+> version of Android".** This is expected. Tap **More details → Install
+> anyway** and everything works normally.
+>
+> Mobile Agent targets API 28 deliberately. Since Android 10, apps targeting
+> API 29 or higher [cannot execute files in their own data
+> directory](https://developer.android.com/about/versions/10/behavior-changes-10#execute-permission)
+> — and the Ubuntu environment, Node.js and Claude Code all live there.
+> Targeting 28 is the only way to keep the Linux runtime working. Termux
+> targets 28 for exactly the same reason.
+>
+> <details>
+> <summary>If you don't see an "Install anyway" option</summary>
+>
+> Google Play Protect is blocking the install rather than Android itself.
+> Either:
+>
+> 1. **Play Store → your profile → Play Protect → ⚙️ → turn off "Scan apps with
+>    Play Protect"**, install, then turn it back on; or
+> 2. Install over ADB from a computer:
+>    ```bash
+>    adb install mobile-agent.apk
+>    ```
+>
+> Android's own hard install block only applies below API 23, so an API 28
+> build is never rejected by the OS itself.
+> </details>
+
 ### 2. Guided Bootstrap (~10 Minutes)
 Launch the application and follow the interactive setup wizard:
 
